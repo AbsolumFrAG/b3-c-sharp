@@ -1,0 +1,49 @@
+﻿@model TP_CSharp.Models.User
+
+<div class="Inclusive_profile_page">
+    <div class="profile-top-wrap">
+        <span>
+            Information du membre
+        </span>
+        @if (User.IsInRole("admin"))
+        {
+            <a href="/Admin/DeleteUser/@Model.Id">Fermer le compte</a>
+        }
+        else
+        {
+            <a href="/Account/DeleteAccount/@Model.Id">Fermer le compte</a>
+        }
+    </div>
+    <ul>
+        <li>
+            <span>
+                Nom complet
+            </span>
+            <div>
+                @Model.FullName
+            </div>
+        </li>
+        <li>
+            <span>Email</span>
+            <div>
+                @Model.Email
+            </div>
+        </li>
+        <li>
+            <span>Date de création</span>
+            <div>
+                @Model.CreatedAt
+            </div>
+        </li>
+    </ul>
+    
+    <div class="btns_wrap">
+        <button class="profileEditBtn">
+            <a href="/Account/EditProfile">
+                Editer le profil
+            </a>
+        </button>
+    </div>
+</div>
+
+<link rel="stylesheet" href="~/css/profile.css" />
