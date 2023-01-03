@@ -44,9 +44,9 @@ namespace TP_CSharp.Controllers
 
                 var claims = new List<Claim>
                 {
-                    new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                    new(ClaimTypes.Name, user.FullName ?? string.Empty),
-                    new(ClaimTypes.Role, user.Role),
+                    new(ClaimTypes.NameIdentifier, user?.Id.ToString() ?? string.Empty),
+                    new(ClaimTypes.Name, user?.FullName ?? string.Empty),
+                    new(ClaimTypes.Role, user?.Role),
                     new("Email", user.Email)
                 };
 
@@ -108,9 +108,88 @@ namespace TP_CSharp.Controllers
             return View(user);
         }
 
-        public IActionResult Index()
+        [Authorize]
+        [HttpGet]
+        public IActionResult EditProfile()
         {
-            return View();
+            var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty);
+
+            var user = _context.Users.SingleOrDefault(u => u.Id == userId);
+
+            return View(user);
+        }
+
+        [Authorize]
+        [HttpPost]
+        public async Task<IActionResult> EditProfile(User user)
+        {
+            var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty);
+
+            var userDb = _context.Users.SingleOrDefault(u => u.Id == userId);
+
+            if (userDb == null)
+                return RedirectToAction("NotFound", "Error");
+
+            if (userDb.Email != user.Email)
+            {
+                if (_context.Users.Any(u => u.Email == user.Email))
+                {
+                    ModelState.AddModelError("Email", "L'email existe déjà");
+                    return View(user);
+                }
+            }
+
+            if (Request.Form.Files.Count > 0)
+            {
+                var image = Request.Form.Files[0];
+
+                if (image.Length > 0)
+                {
+                    using var stream = new MemoryStream();
+                    await image.CopyToAsync(stream);
+                    userDb.ProfileImage = Convert.ToBase64String(stream.ToArray());
+                }
+            }
+
+            userDb.FullName = user.FullName;
+            userDb.Email = user.Email;
+
+            await _context.SaveChangesAsync();
+
+            return RedirectToAction("Profile", "Account");
+        }
+
+        public IActionResult Logout()
+        {
+            HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            return RedirectToAction("Index", "Home");
+        }
+
+        [Authorize]
+        [HttpGet]
+        public async Task<IActionResult> DeleteAccount(Guid id)
+        {
+            var user = _context.Users.SingleOrDefault(u => u.Id == id);
+
+            if (user == null)
+                return RedirectToAction("NotFound", "Error");
+
+            var relatedBlogs = _context.Blogs.Where(b => b.UserId == user.Id).ToList();
+
+            var relatedComments = _context.Comments.Where(c => c.UserId == user.Id).ToList();
+
+            foreach (var blog in relatedBlogs)
+                _context.Blogs.Remove(blog);
+
+            foreach (var comment in relatedComments)
+                _context.Comments.Remove(comment);
+
+            _context.Users.Remove(user);
+            await _context.SaveChangesAsync();
+
+            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+
+            return RedirectToAction("Index", "Home");
         }
     }
 }

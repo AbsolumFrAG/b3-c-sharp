@@ -1,0 +1,162 @@
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
+using TP_CSharp.Models;
+
+namespace TP_CSharp.Controllers
+{
+    public class BlogController : Controller
+    {
+        private readonly MainContext _context;
+
+        public BlogController(MainContext context)
+        {
+            _context = context;
+        }
+
+        public async Task<IActionResult> Index()
+        {
+            var blogs = _context.Blogs;
+            return View(await blogs.ToListAsync());
+        }
+
+        [Authorize]
+        public IActionResult Create()
+        {
+            return View();
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [Authorize]
+        public async Task<IActionResult> Create(Blog blog)
+        {
+            if (!ModelState.IsValid) return View(blog);
+            if (Request.Form.Files.Count > 0)
+            {
+                var image = Request.Form.Files[0];
+
+                if (image.Length > 0)
+                {
+                    using var stream = new MemoryStream();
+                    await image.CopyToAsync(stream);
+                    blog.Image = Convert.ToBase64String(stream.ToArray());
+                }
+            }
+            var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty);
+
+            var user = _context.Users.SingleOrDefault(u => u.Id == userId);
+
+            blog.UserId = user?.Id;
+
+            _context.Add(blog);
+            await _context.SaveChangesAsync();
+            return RedirectToAction("Index", "Blog");
+        }
+
+        public async Task<IActionResult> Detail(int? id)
+        {
+            if (id == null)
+                return RedirectToAction("NotFound", "Error");
+
+            var blog = await _context.Blogs
+                .Include(b => b.Comments).Include(b => b.Comments)!.ThenInclude(c => c.User)
+                .FirstOrDefaultAsync(m => m.BlogId == id);
+            await _context.Entry(blog)
+                .Reference(b => b!.User)
+                .LoadAsync();
+
+            if (blog == null)
+                return RedirectToAction("NotFound", "Error");
+
+            return View(blog);
+        }
+
+        [Authorize]
+        public async Task<IActionResult> Edit(int? id)
+        {
+            if (id == null)
+                return RedirectToAction("NotFound", "Error");
+
+            var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty);
+
+            var blog = await _context.Blogs.FindAsync(id);
+
+            if (blog != null && !blog.UserId.Equals(userId))
+            {
+                if (!User.IsInRole("admin"))
+                {
+                    return RedirectToAction("AccessDenied", "Home");
+                }
+            }
+
+            var model = new UpdateBlogViewModel
+            {
+                Title = blog?.Title,
+                Content = blog?.Content,
+                Image = blog?.Image
+            };
+
+            return View(model);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [Authorize]
+        public async Task<IActionResult> Edit(int id, UpdateBlogViewModel model)
+        {
+            if (!ModelState.IsValid)
+                return View(model);
+
+            var blog = await _context.Blogs.FindAsync(id);
+
+            var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty);
+
+            if (blog != null && !blog.UserId.Equals(userId))
+            {
+                if (!User.IsInRole("admin"))
+                    return RedirectToAction("AccessDenied", "Home");
+
+                blog.Title = model.Title;
+                blog.Content = model.Content;
+
+                if (Request.Form.Files.Count > 0)
+                {
+                    var image = Request.Form.Files[0];
+
+                    if (image.Length > 0)
+                    {
+                        using var stream = new MemoryStream();
+                        await image.CopyToAsync(stream);
+                        blog.Image = Convert.ToBase64String(stream.ToArray());
+                    }
+                }
+            }
+            await _context.SaveChangesAsync();
+
+            return RedirectToAction("Detail", "Blog", new { id = blog.BlogId });
+        }
+
+        [Authorize]
+        public async Task<IActionResult> Delete(int id)
+        {
+            var blog = await _context.Blogs.FindAsync(id);
+
+            if (blog == null)
+                return RedirectToAction("NotFound", "Error");
+
+            var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty);
+
+            if (!blog.UserId.Equals(userId))
+                if (!User.IsInRole("admin"))
+                    return RedirectToAction("AccessDenied", "Home");
+
+            _context.Blogs.Remove(blog);
+
+            await _context.SaveChangesAsync();
+
+            return User.IsInRole("admin") ? RedirectToAction("Blogs", "Admin") : RedirectToAction("Index");
+        }
+    }
+}
