@@ -1,4 +1,4 @@
-namespace TP_CSharp.Models
+namespace TP_CSharp.Mvc.Models
 {
     public class ErrorViewModel
     {
