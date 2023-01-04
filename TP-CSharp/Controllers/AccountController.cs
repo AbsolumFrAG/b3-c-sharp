@@ -34,7 +34,7 @@ namespace TP_CSharp.Controllers
                 var hashedPassword = EncryptProvider.Md5(saltedPassword);
 
                 var user = _context.Users.SingleOrDefault(u =>
-                    string.Equals(u.Email, loginUser.Email, StringComparison.CurrentCultureIgnoreCase) && u.Password == hashedPassword);
+                    string.Equals(u.Email, loginUser.Email) && u.Password == hashedPassword);
 
                 if (user is { Locked: true })
                 {
@@ -72,7 +72,7 @@ namespace TP_CSharp.Controllers
         public async Task<IActionResult> Register(RegisterViewModel registerUser)
         {
             if (!ModelState.IsValid) return View(registerUser);
-            if (_context.Users.Any(u => string.Equals(u.Email, registerUser.Email, StringComparison.CurrentCultureIgnoreCase)))
+            if (_context.Users.Any(u => string.Equals(u.Email, registerUser.Email)))
             {
                 ModelState.AddModelError("Email", "L'email existe déjà");
                 return View(registerUser);
